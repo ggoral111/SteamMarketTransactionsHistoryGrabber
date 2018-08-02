@@ -27,4 +27,28 @@ public class HoverItem {
 		return this;
 	}
 	
+	@Override
+	public boolean equals(Object obj) {
+		if(this == obj) {
+			return true;
+		}
+		
+		if(obj == null || getClass() != obj.getClass()) {
+			return false;
+		}
+		
+		HoverItem hi = (HoverItem) obj;
+		
+		return this.history_row_id.equals(hi.getHistory_row_id()) && this.asset_id.equals(hi.getAsset_id());
+	}
+	
+	@Override
+	public int hashCode() {
+		int hash = 1;
+		hash = 31 * hash + (this.history_row_id == null ? 0 : this.history_row_id.hashCode());
+		hash = 31 * hash + (this.asset_id == null ? 0 : this.asset_id.hashCode());
+		
+		return hash;
+	}
+	
 }

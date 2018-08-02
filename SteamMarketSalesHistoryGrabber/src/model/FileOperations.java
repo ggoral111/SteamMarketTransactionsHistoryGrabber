@@ -18,7 +18,7 @@ import java.util.Scanner;
  * Simple interface which implements all kinds of default methods connected with file operations.
  * Supports multi-threaded operations on files with locks usage.
  * 
- * @author Jakub Podgórski
+ * @author Jakub Podgï¿½rski
  *
  */
 public interface FileOperations {
@@ -48,7 +48,9 @@ public interface FileOperations {
 	 */
 	default String readFile(String path) {
 		try(Scanner sc = new Scanner(new File(path), "UTF-8")) {
-			return sc.useDelimiter("\\Z").next();
+			if(sc.hasNextLine()) {
+				return sc.useDelimiter("\\Z").next();
+			}
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}

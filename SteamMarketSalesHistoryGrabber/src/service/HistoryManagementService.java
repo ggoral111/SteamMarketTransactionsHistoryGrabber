@@ -27,6 +27,7 @@ import org.jsoup.select.Elements;
 import com.google.gson.Gson;
 
 import javafx.application.Platform;
+import javafx.scene.control.Button;
 import javafx.scene.web.WebEngine;
 import model.FileOperations;
 import model.HoverItem;
@@ -39,7 +40,7 @@ public class HistoryManagementService implements FileOperations, JSONValidator {
 	private static final int NUMBER_OF_THREADS, BREAK_BETWEEN_MARKET_PARSING, MAX_REDOWNLOAD_ATTEMPTS;
 	
 	static {
-		STEAM_MARKET_HISTORY_URL = "https://steamcommunity.com/market/myhistory/render/?query=&start=";	
+		STEAM_MARKET_HISTORY_URL = "https://steamcommunity.com/market/myhistory/render/?query=&start=";
 		FILE_SAVE_PATH = "data/market_history_";
 		// NUMBER_OF_THREADS = Runtime.getRuntime().availableProcessors();
 		NUMBER_OF_THREADS = 1;
@@ -79,10 +80,10 @@ public class HistoryManagementService implements FileOperations, JSONValidator {
 			return countDownLatch;
 		} else {
 			throw new IllegalStateException("CountDownLatch is not initialized!");
-		}		
+		}
 	}
 
-	public void marketHistoryParser(WebEngine signInThroughSteamWebEngine, final int marketTransactionsNumber, final int marketTransactionsOffset) {
+	public void marketHistoryParser(WebEngine signInThroughSteamWebEngine, final int marketTransactionsNumber, final int marketTransactionsOffset, Button stopMarketHistoryParserButton) {
 		threadPool = Executors.newScheduledThreadPool(NUMBER_OF_THREADS);
 		marketTransactionsParsedCounter = new AtomicInteger(marketTransactionsOffset);
 		failedAttemptsCounter = new AtomicInteger(0);
@@ -106,10 +107,15 @@ public class HistoryManagementService implements FileOperations, JSONValidator {
 				
 				if(convertedData != null) {
 					String filePath = FILE_SAVE_PATH + marketTransactionsParsedCounter.get() + "_" + dateFormat.format(Calendar.getInstance().getTime()) + ".json";
-					writeFileWithLock(filePath, convertedData);					
-					System.out.println("Market transactions history in a number of " + marketListingsAmountPerRequest + " was saved successfully to file: " + filePath.split("/")[1]);
+					writeFileWithLock(filePath, convertedData);
+					String[] splittedFilePath = filePath.split("/");
+					System.out.println("Market transactions history in a number of " + marketListingsAmountPerRequest + " was saved successfully to file: " + splittedFilePath[splittedFilePath.length - 1]);
 					
 					if(marketTransactionsParsedCounter.get() >= marketTransactionsNumber) {
+						Platform.runLater(() -> {
+							stopMarketHistoryParserButton.fire();
+						});
+						
 						stopMarketHistoryParser();
 					} else {
 						marketTransactionsParsedCounter.set(marketTransactionsParsedCounter.get() + marketListingsAmountPerRequest);
@@ -189,45 +195,47 @@ public class HistoryManagementService implements FileOperations, JSONValidator {
 			}
 		}
 		
-		String[] hoversContent = removeSpecialCharactersFromString(jsonData.getString("hovers")).split(";");
-		Set<HoverItem> matchedHoverItemsSet = new LinkedHashSet<>();
-		
-		for(String s : hoversContent) {
-			String[] itemHoverContent = s.substring(s.indexOf("(") + 1, s.indexOf(")")).split(",");
+		if(!marketListingsList.isEmpty()) {
+			String[] hoversContent = removeSpecialCharactersFromString(jsonData.getString("hovers")).split(";");
+			Set<HoverItem> matchedHoverItemsSet = new LinkedHashSet<>();
 			
-			try {
-				if(Integer.parseInt(itemHoverContent[2].trim()) == 730) {
-					String historyRowId = itemHoverContent[1].replace("'", "").trim();
-					matchedHoverItemsSet.add(new HoverItem(historyRowId.substring(0, historyRowId.lastIndexOf("_")), itemHoverContent[4].replace("'", "").trim()));
+			for(String s : hoversContent) {
+				String[] itemHoverContent = s.substring(s.indexOf("(") + 1, s.indexOf(")")).split(",");
+				
+				try {
+					if(Integer.parseInt(itemHoverContent[2].trim()) == 730) {
+						String historyRowId = itemHoverContent[1].replace("'", "").trim();
+						matchedHoverItemsSet.add(new HoverItem(historyRowId.substring(0, historyRowId.lastIndexOf("_")), itemHoverContent[4].replace("'", "").trim()));
+					}
+				} catch(NumberFormatException e) {
+					e.printStackTrace();
 				}
-			} catch(NumberFormatException e) {
-				e.printStackTrace();
 			}
-		}
-		
-		if(!matchedHoverItemsSet.isEmpty()) {
-			for(MarketListing ml : marketListingsList) {
-				for(HoverItem hi : matchedHoverItemsSet) {
-					if(ml.getHistory_row_id().equals(hi.getHistory_row_id())) {
-						ml.setAsset_id(hi.getAsset_id());
-						break;
+			
+			if(!matchedHoverItemsSet.isEmpty()) {
+				for(MarketListing ml : marketListingsList) {
+					for(HoverItem hi : matchedHoverItemsSet) {
+						if(ml.getHistory_row_id().equals(hi.getHistory_row_id())) {
+							ml.setAsset_id(hi.getAsset_id());
+							break;
+						}
 					}
 				}
-			}
-			
-			JSONObject assetsObject = jsonData.getJSONObject("assets").getJSONObject("730").getJSONObject("2");			
-			Iterator<String> assetsIterator = assetsObject.keys();
-			
-			while(assetsIterator.hasNext()) {
-				String assetsObjectKey = assetsIterator.next();
 				
-				for(MarketListing ml : marketListingsList) {
-					if(ml.getAsset_id() != null && ml.getAsset_id().equals(assetsObjectKey)) {
-						JSONObject assetInnerObject = assetsObject.getJSONObject(assetsObjectKey);
-						
-						if(assetInnerObject.has("actions")) {
-							ml.setInspect_ingame(assetInnerObject.getJSONArray("actions").getJSONObject(0).getString("link").replace("%assetid%", assetsObjectKey));
-							break;
+				JSONObject assetsObject = jsonData.getJSONObject("assets").getJSONObject("730").getJSONObject("2");			
+				Iterator<String> assetsIterator = assetsObject.keys();
+				
+				while(assetsIterator.hasNext()) {
+					String assetsObjectKey = assetsIterator.next();
+					
+					for(MarketListing ml : marketListingsList) {
+						if(ml.getAsset_id() != null && ml.getAsset_id().equals(assetsObjectKey)) {
+							JSONObject assetInnerObject = assetsObject.getJSONObject(assetsObjectKey);
+							
+							if(assetInnerObject.has("actions")) {
+								ml.setInspect_ingame(assetInnerObject.getJSONArray("actions").getJSONObject(0).getString("link").replace("%assetid%", assetsObjectKey));
+								break;
+							}
 						}
 					}
 				}
