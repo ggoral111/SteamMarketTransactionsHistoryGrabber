@@ -3,6 +3,7 @@ package service;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -20,11 +22,12 @@ import com.google.gson.Gson;
 
 import javafx.application.Platform;
 import javafx.scene.control.Button;
+import model.ConsoleLineSeparator;
 import model.FileOperations;
 import model.JSONValidator;
 import model.MarketListing;
 
-public class MarketListingsSearcherService implements FileOperations, JSONValidator {
+public class MarketListingsSearcherService implements FileOperations, JSONValidator, ConsoleLineSeparator {
 	
 	private final static int NUMBER_OF_THREADS;
 	private final static String DATA_FOLDER_PATH, SEARCH_RESULT_FILE_PATH;
@@ -38,8 +41,10 @@ public class MarketListingsSearcherService implements FileOperations, JSONValida
 	
 	private ExecutorService threadPool = null;
 	private final SimpleDateFormat dateFormat;
+	private final String lineSeparator;
 	
 	public MarketListingsSearcherService() {
+		lineSeparator = produceSeparator("\u2500", 100);
 		dateFormat = new SimpleDateFormat("MM-dd-YYYY_HH-mm-ss");
 	}
 	
@@ -89,10 +94,10 @@ public class MarketListingsSearcherService implements FileOperations, JSONValida
 		}
 		
 		stopSearchListings();
-		System.out.println("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");		
+		System.out.println(lineSeparator);
 		
 		if(!resultsList.isEmpty()) {
-			String filePath = SEARCH_RESULT_FILE_PATH + dateFormat.format(Calendar.getInstance().getTime()) + ".json";
+			String filePath = SEARCH_RESULT_FILE_PATH + dateFormat.format(Calendar.getInstance().getTime()) + "_" + Arrays.stream(splittedWordsToSearch).collect(Collectors.joining("_", "[", "]")) + ".json";
 			writeFile(filePath, new Gson().toJson(resultsList));
 			String[] splittedFilePath = filePath.split("/");
 			System.out.println("Matched history transactions was saved successfully to file: " + splittedFilePath[splittedFilePath.length - 1]);

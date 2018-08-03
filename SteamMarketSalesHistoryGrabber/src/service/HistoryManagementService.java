@@ -29,12 +29,14 @@ import com.google.gson.Gson;
 import javafx.application.Platform;
 import javafx.scene.control.Button;
 import javafx.scene.web.WebEngine;
+import model.ConsoleLineSeparator;
+import model.ConvertedResponse;
 import model.FileOperations;
 import model.HoverItem;
 import model.JSONValidator;
 import model.MarketListing;
 
-public class HistoryManagementService implements FileOperations, JSONValidator {
+public class HistoryManagementService implements FileOperations, JSONValidator, ConsoleLineSeparator {
 	
 	private final static String STEAM_MARKET_HISTORY_URL, FILE_SAVE_PATH;	
 	private static final int NUMBER_OF_THREADS, BREAK_BETWEEN_MARKET_PARSING, MAX_REDOWNLOAD_ATTEMPTS;
@@ -44,7 +46,7 @@ public class HistoryManagementService implements FileOperations, JSONValidator {
 		FILE_SAVE_PATH = "data/market_history_";
 		// NUMBER_OF_THREADS = Runtime.getRuntime().availableProcessors();
 		NUMBER_OF_THREADS = 1;
-		BREAK_BETWEEN_MARKET_PARSING = 10;
+		BREAK_BETWEEN_MARKET_PARSING = 15;
 		MAX_REDOWNLOAD_ATTEMPTS = 5;
 	}
 	
@@ -56,11 +58,13 @@ public class HistoryManagementService implements FileOperations, JSONValidator {
 	private CountDownLatch countDownLatch;
 	private DecimalFormatSymbols symbols;
 	private DecimalFormat df;
+	private final String lineSeparator;
 	
 	public HistoryManagementService() {
 		marketListingsAmountPerRequest = 100;
 		dateFormat = new SimpleDateFormat("MM-dd-YYYY_HH-mm-ss");
 		countDownLatch = null;
+		lineSeparator = produceSeparator("\u2500", 100);
 		
 		// set number formatter
 		symbols = new DecimalFormatSymbols();
@@ -84,52 +88,60 @@ public class HistoryManagementService implements FileOperations, JSONValidator {
 	}
 
 	public void marketHistoryParser(WebEngine signInThroughSteamWebEngine, final int marketTransactionsNumber, final int marketTransactionsOffset, Button stopMarketHistoryParserButton) {
-		threadPool = Executors.newScheduledThreadPool(NUMBER_OF_THREADS);
-		marketTransactionsParsedCounter = new AtomicInteger(marketTransactionsOffset);
-		failedAttemptsCounter = new AtomicInteger(0);
-		grabbedMarketHistoryData = new AtomicReference<>();
-		
-		System.out.println("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
-		
-		threadPool.scheduleAtFixedRate(() -> {
-			countDownLatch = new CountDownLatch(NUMBER_OF_THREADS);
-			String connectionURL = STEAM_MARKET_HISTORY_URL + marketTransactionsParsedCounter.get() + "&count=" + marketListingsAmountPerRequest;
-			System.out.println("Parsing data: " + df.format(marketTransactionsParsedCounter.get() + marketListingsAmountPerRequest) + " out of: " + df.format(marketTransactionsNumber));
-			System.out.println("Connecting to remote source: " + connectionURL);
+		if(marketTransactionsNumber > marketTransactionsOffset) {
+			threadPool = Executors.newScheduledThreadPool(NUMBER_OF_THREADS);
+			marketTransactionsParsedCounter = new AtomicInteger(marketTransactionsOffset);
+			failedAttemptsCounter = new AtomicInteger(0);
+			grabbedMarketHistoryData = new AtomicReference<>();
+			
+			System.out.println(lineSeparator);
+			
+			threadPool.scheduleAtFixedRate(() -> {
+				countDownLatch = new CountDownLatch(NUMBER_OF_THREADS);
+				String connectionURL = STEAM_MARKET_HISTORY_URL + marketTransactionsParsedCounter.get() + "&count=" + marketListingsAmountPerRequest;
+				System.out.println("Parsing data: " + df.format(marketTransactionsParsedCounter.get() + marketListingsAmountPerRequest) + " out of: " + df.format(marketTransactionsNumber));
+				System.out.println("Connecting to remote source: " + connectionURL);
+				
+				Platform.runLater(() -> {
+					signInThroughSteamWebEngine.load(connectionURL);
+				});
+				
+				try {
+					countDownLatch.await();
+					ConvertedResponse convertedData = convertHTMLToJSON(grabbedMarketHistoryData.get());
+					
+					if(convertedData.getConvertedResponse() != null) {
+						String filePath = FILE_SAVE_PATH + marketTransactionsParsedCounter.get() + "_" + dateFormat.format(Calendar.getInstance().getTime()) + ".json";
+						writeFileWithLock(filePath, convertedData.getConvertedResponse());
+						String[] splittedFilePath = filePath.split("/");
+						System.out.println("Market transactions history in a number of " + convertedData.getTransactionsListSize() + " was saved successfully to file: " + splittedFilePath[splittedFilePath.length - 1]);
+						marketTransactionsParsedCounter.set(marketTransactionsParsedCounter.get() + marketListingsAmountPerRequest);
+						
+						if(marketTransactionsParsedCounter.get() >= marketTransactionsNumber) {
+							System.out.println(lineSeparator + "\nData parsing has been successfully completed.");
+							
+							Platform.runLater(() -> {
+								stopMarketHistoryParserButton.fire();
+							});
+						} else {					
+							failedAttemptsCounter.set(0);
+						}
+					} else {
+						System.out.println("There were some errors while downloading market transaction history. Program will try to download data again.");
+					}
+					
+					System.out.println(lineSeparator);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}					
+			}, 0, BREAK_BETWEEN_MARKET_PARSING, TimeUnit.SECONDS);
+		} else {
+			System.out.println("Offset value is equal or greater than the number of Steam Marketplace transactions. Parser data processing has been aborted.");		
 			
 			Platform.runLater(() -> {
-				signInThroughSteamWebEngine.load(connectionURL);
+				stopMarketHistoryParserButton.fire();
 			});
-			
-			try {
-				countDownLatch.await();
-				String convertedData = convertHTMLToJSON(grabbedMarketHistoryData.get());
-				
-				if(convertedData != null) {
-					String filePath = FILE_SAVE_PATH + marketTransactionsParsedCounter.get() + "_" + dateFormat.format(Calendar.getInstance().getTime()) + ".json";
-					writeFileWithLock(filePath, convertedData);
-					String[] splittedFilePath = filePath.split("/");
-					System.out.println("Market transactions history in a number of " + marketListingsAmountPerRequest + " was saved successfully to file: " + splittedFilePath[splittedFilePath.length - 1]);
-					
-					if(marketTransactionsParsedCounter.get() >= marketTransactionsNumber) {
-						Platform.runLater(() -> {
-							stopMarketHistoryParserButton.fire();
-						});
-						
-						stopMarketHistoryParser();
-					} else {
-						marketTransactionsParsedCounter.set(marketTransactionsParsedCounter.get() + marketListingsAmountPerRequest);
-						failedAttemptsCounter.set(0);
-					}
-				} else {
-					System.out.println("There were some errors while downloading market transaction history. Program will try to download data again.");
-				}
-				
-				System.out.println("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-");
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}					
-		}, 0, BREAK_BETWEEN_MARKET_PARSING, TimeUnit.SECONDS);
+		}
 	}
 	
 	public void stopMarketHistoryParser() {
@@ -147,7 +159,7 @@ public class HistoryManagementService implements FileOperations, JSONValidator {
 		}		
 	}
 
-	private String convertHTMLToJSON(String htmlToConvert) {
+	private ConvertedResponse convertHTMLToJSON(String htmlToConvert) {
 		if(!isJSON(htmlToConvert)) {
 			return null;
 		}
@@ -242,7 +254,7 @@ public class HistoryManagementService implements FileOperations, JSONValidator {
 			}
 		}
 		
-		return new Gson().toJson(marketListingsList);
+		return new ConvertedResponse(new Gson().toJson(marketListingsList), marketListingsList.size());
 	}
 	
 	private String removeSpecialCharactersFromString(String data) {
