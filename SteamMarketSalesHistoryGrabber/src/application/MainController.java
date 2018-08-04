@@ -8,10 +8,13 @@ import javafx.beans.value.ObservableValue;
 import javafx.concurrent.Worker;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.AnchorPane;
+import javafx.scene.text.TextFlow;
 import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebView;
+import model.LogFlow;
 import service.HistoryManagementService;
 import service.MarketListingsSearcherService;
 
@@ -40,6 +43,15 @@ public class MainController {
 	
 	@FXML
 	private TextField searchListingsWordsTextField;
+	
+	@FXML
+	private ScrollPane logScrollPane;
+	
+	@FXML
+	private AnchorPane logAnchorPane;
+	
+	@FXML
+	private TextFlow logTextFlow;
 
 	private final static HistoryManagementService HISTORY_MANAGEMENT_SERVICE;
 	private final static MarketListingsSearcherService MARKET_LISTINGS_SEARCHER_SERVICE;
@@ -71,6 +83,7 @@ public class MainController {
 		// disable text fields and buttons at launch
 		disableTextFieldsAndButtons();
 		enableSearchTextFieldAndButtons();
+		logAnchorPane.heightProperty().addListener(observable -> logScrollPane.setVvalue(1D));
 		
 		signInThroughSteamCookieManager = new CookieManager();
 		CookieHandler.setDefault(signInThroughSteamCookieManager);	
@@ -101,21 +114,21 @@ public class MainController {
 					if(isSteamLoginSecureCommunityPresent.get() && isSteamLoginSecureStorePresent.get()) {
 						isSignedIntoSteam = true;
 						enableTextFieldsAndButtons();
-						System.out.println("Signed into Steam successfully!");
+						LogFlow.LOG.addTextToTextFlow("You have successfully logged into Steam!\n", 2, logTextFlow);
 					} else {
 						isSignedIntoSteam = false;
 						disableTextFieldsAndButtons();
-						System.out.println("Signing into Steam failed!");
+						LogFlow.LOG.addTextToTextFlow("Please sign in through Steam firstly in order to start grabbing transactions history data from Steam Marketplace.\n", 2, logTextFlow);
 					}					
 				} else if(isSignedIntoSteam && isReadyToGrabData) {
 					HISTORY_MANAGEMENT_SERVICE.getGrabbedMarketHistoryData().set(signInThroughSteamWebEngine.executeScript("document.getElementsByTagName('pre')[0].innerHTML").toString());					
-					System.out.println("Data successfully grebbed from remote source.");
+					LogFlow.LOG.addTextToTextFlow("Data successfully grebbed from remote source.\n", 1, logTextFlow);
 					HISTORY_MANAGEMENT_SERVICE.getCountDownLatch().countDown();
 				}
 			} else if(newValue == Worker.State.FAILED){
 				if(isSignedIntoSteam && isReadyToGrabData) {
 					HISTORY_MANAGEMENT_SERVICE.getGrabbedMarketHistoryData().set(null);
-					System.out.println("Data was not loaded properly from remote source.");
+					LogFlow.LOG.addTextToTextFlow("Data was not loaded properly from remote source.\n", 0, logTextFlow);
 					HISTORY_MANAGEMENT_SERVICE.getCountDownLatch().countDown();
 				}
 			}
@@ -137,7 +150,8 @@ public class MainController {
 				isReadyToGrabData = true;
 				disableTextFieldsAndButtons();
 				disableSearchTextFieldAndButtons();
-				HISTORY_MANAGEMENT_SERVICE.marketHistoryParser(signInThroughSteamWebEngine, marketTransactionsNumber, marketTransactionsOffset, stopMarketHistoryParserButton);
+				logTextFlow.getChildren().clear();
+				HISTORY_MANAGEMENT_SERVICE.marketHistoryParser(signInThroughSteamWebEngine, marketTransactionsNumber, marketTransactionsOffset, stopMarketHistoryParserButton, logTextFlow);
 			} catch(NumberFormatException e) {
 				e.printStackTrace();
 			}
@@ -162,7 +176,8 @@ public class MainController {
 			isSearchingListings = true;
 			disableTextFieldsAndButtons();
 			disableSearchTextFieldAndButtons();
-			MARKET_LISTINGS_SEARCHER_SERVICE.searchListings(searchListingsWordsTextFieldValue, stopSearchListingsButton);
+			logTextFlow.getChildren().clear();
+			MARKET_LISTINGS_SEARCHER_SERVICE.searchListings(searchListingsWordsTextFieldValue, stopSearchListingsButton, logTextFlow);
 		}
 	}
 	

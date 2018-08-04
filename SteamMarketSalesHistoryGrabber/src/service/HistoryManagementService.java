@@ -28,12 +28,14 @@ import com.google.gson.Gson;
 
 import javafx.application.Platform;
 import javafx.scene.control.Button;
+import javafx.scene.text.TextFlow;
 import javafx.scene.web.WebEngine;
 import model.ConsoleLineSeparator;
 import model.ConvertedResponse;
 import model.FileOperations;
 import model.HoverItem;
 import model.JSONValidator;
+import model.LogFlow;
 import model.MarketListing;
 
 public class HistoryManagementService implements FileOperations, JSONValidator, ConsoleLineSeparator {
@@ -87,20 +89,20 @@ public class HistoryManagementService implements FileOperations, JSONValidator, 
 		}
 	}
 
-	public void marketHistoryParser(WebEngine signInThroughSteamWebEngine, final int marketTransactionsNumber, final int marketTransactionsOffset, Button stopMarketHistoryParserButton) {
+	public void marketHistoryParser(WebEngine signInThroughSteamWebEngine, final int marketTransactionsNumber, final int marketTransactionsOffset, Button stopMarketHistoryParserButton, TextFlow logTextFlow) {
 		if(marketTransactionsNumber > marketTransactionsOffset) {
 			threadPool = Executors.newScheduledThreadPool(NUMBER_OF_THREADS);
 			marketTransactionsParsedCounter = new AtomicInteger(marketTransactionsOffset);
 			failedAttemptsCounter = new AtomicInteger(0);
 			grabbedMarketHistoryData = new AtomicReference<>();
 			
-			System.out.println(lineSeparator);
+			LogFlow.LOG.addTextToTextFlow(lineSeparator, 1, logTextFlow);
 			
 			threadPool.scheduleAtFixedRate(() -> {
 				countDownLatch = new CountDownLatch(NUMBER_OF_THREADS);
 				String connectionURL = STEAM_MARKET_HISTORY_URL + marketTransactionsParsedCounter.get() + "&count=" + marketListingsAmountPerRequest;
-				System.out.println("Parsing data: " + df.format(marketTransactionsParsedCounter.get() + marketListingsAmountPerRequest) + " out of: " + df.format(marketTransactionsNumber));
-				System.out.println("Connecting to remote source: " + connectionURL);
+				LogFlow.LOG.addTextToTextFlow("Parsing data: " + df.format(marketTransactionsParsedCounter.get() + marketListingsAmountPerRequest) + " out of: " + df.format(marketTransactionsNumber) + "\n", 1, logTextFlow);
+				LogFlow.LOG.addTextToTextFlow("Connecting to remote source: " + connectionURL + "\n", 1, logTextFlow);
 				
 				Platform.runLater(() -> {
 					signInThroughSteamWebEngine.load(connectionURL);
@@ -108,17 +110,18 @@ public class HistoryManagementService implements FileOperations, JSONValidator, 
 				
 				try {
 					countDownLatch.await();
-					ConvertedResponse convertedData = convertHTMLToJSON(grabbedMarketHistoryData.get());
+					ConvertedResponse convertedData = convertHTMLToJSON(grabbedMarketHistoryData.get(), logTextFlow);
 					
 					if(convertedData.getConvertedResponse() != null) {
 						String filePath = FILE_SAVE_PATH + marketTransactionsParsedCounter.get() + "_" + dateFormat.format(Calendar.getInstance().getTime()) + ".json";
 						writeFileWithLock(filePath, convertedData.getConvertedResponse());
 						String[] splittedFilePath = filePath.split("/");
-						System.out.println("Market transactions history in a number of " + convertedData.getTransactionsListSize() + " was saved successfully to file: " + splittedFilePath[splittedFilePath.length - 1]);
+						LogFlow.LOG.addTextToTextFlow("Market transactions history in a number of " + convertedData.getTransactionsListSize() + " was saved successfully to file: " + splittedFilePath[splittedFilePath.length - 1] + "\n", 2, logTextFlow);
 						marketTransactionsParsedCounter.set(marketTransactionsParsedCounter.get() + marketListingsAmountPerRequest);
 						
 						if(marketTransactionsParsedCounter.get() >= marketTransactionsNumber) {
-							System.out.println(lineSeparator + "\nData parsing has been successfully completed.");
+							LogFlow.LOG.addTextToTextFlow(lineSeparator, 1, logTextFlow);
+							LogFlow.LOG.addTextToTextFlow("Data parsing has been successfully completed.\n", 2, logTextFlow);
 							
 							Platform.runLater(() -> {
 								stopMarketHistoryParserButton.fire();
@@ -127,16 +130,16 @@ public class HistoryManagementService implements FileOperations, JSONValidator, 
 							failedAttemptsCounter.set(0);
 						}
 					} else {
-						System.out.println("There were some errors while downloading market transaction history. Program will try to download data again.");
+						LogFlow.LOG.addTextToTextFlow("There were some errors while downloading market transaction history. Program will try to download data again.\n", 0, logTextFlow);
 					}
 					
-					System.out.println(lineSeparator);
+					LogFlow.LOG.addTextToTextFlow(lineSeparator, 1, logTextFlow);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}					
 			}, 0, BREAK_BETWEEN_MARKET_PARSING, TimeUnit.SECONDS);
 		} else {
-			System.out.println("Offset value is equal or greater than the number of Steam Marketplace transactions. Parser data processing has been aborted.");		
+			LogFlow.LOG.addTextToTextFlow("Offset value is equal or greater than the number of Steam Marketplace transactions. Parser data processing has been aborted.\n", 0, logTextFlow);
 			
 			Platform.runLater(() -> {
 				stopMarketHistoryParserButton.fire();
@@ -159,7 +162,7 @@ public class HistoryManagementService implements FileOperations, JSONValidator, 
 		}		
 	}
 
-	private ConvertedResponse convertHTMLToJSON(String htmlToConvert) {
+	private ConvertedResponse convertHTMLToJSON(String htmlToConvert, TextFlow logTextFlow) {
 		if(!isJSON(htmlToConvert)) {
 			return null;
 		}
@@ -176,8 +179,8 @@ public class HistoryManagementService implements FileOperations, JSONValidator, 
 				return null;
 			} else {
 				stopMarketHistoryParser();
-				System.out.println("Cannot connect to remote source. Maximum number of reconnections (" + MAX_REDOWNLOAD_ATTEMPTS + ") has been reached. Parser has been stopped.");
-            	throw new IllegalArgumentException("Cannot connect to remote source.");
+				LogFlow.LOG.addTextToTextFlow("Cannot connect to remote source. Maximum number of reconnections (" + MAX_REDOWNLOAD_ATTEMPTS + ") has been reached. Parser has been stopped.\n", 0, logTextFlow);
+				throw new IllegalArgumentException("Cannot connect to remote source.");
 			}
 		}
 		

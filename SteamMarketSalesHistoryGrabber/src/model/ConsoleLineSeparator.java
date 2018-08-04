@@ -9,6 +9,6 @@ public interface ConsoleLineSeparator {
 			sb.append(separatorCharacter);
 		}
 		
-		return sb.toString();
+		return sb.append("\n").toString();
 	}
 }

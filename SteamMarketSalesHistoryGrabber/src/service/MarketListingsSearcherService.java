@@ -22,9 +22,11 @@ import com.google.gson.Gson;
 
 import javafx.application.Platform;
 import javafx.scene.control.Button;
+import javafx.scene.text.TextFlow;
 import model.ConsoleLineSeparator;
 import model.FileOperations;
 import model.JSONValidator;
+import model.LogFlow;
 import model.MarketListing;
 
 public class MarketListingsSearcherService implements FileOperations, JSONValidator, ConsoleLineSeparator {
@@ -48,7 +50,7 @@ public class MarketListingsSearcherService implements FileOperations, JSONValida
 		dateFormat = new SimpleDateFormat("MM-dd-YYYY_HH-mm-ss");
 	}
 	
-	public void searchListings(String wordsToSearch, Button stopSearchListingsButton) {
+	public void searchListings(String wordsToSearch, Button stopSearchListingsButton, TextFlow logTextFlow) {
 		List<String> filesPathsList = getFilePaths();
 		String[] splittedWordsToSearch = splitSearchWords(wordsToSearch);
 		List<MarketListing> resultsList = Collections.synchronizedList(new ArrayList<>());
@@ -62,7 +64,7 @@ public class MarketListingsSearcherService implements FileOperations, JSONValida
 				String[] splittedPath = path.split("\\\\");
 				
 				if(jsonListings != null && isJSON(jsonListings)) {
-					System.out.println("Thread[" + threadNumber+ "] operations started. File: " + splittedPath[splittedPath.length - 1] + " was successfully loaded.");
+					LogFlow.LOG.addTextToTextFlow("Thread[" + threadNumber+ "] operations started. File: " + splittedPath[splittedPath.length - 1] + " was successfully loaded.\n", 1, logTextFlow);
 					JSONArray listingsArray = new JSONArray(jsonListings);
 					
 					if(listingsArray.length() > 0) {
@@ -89,20 +91,20 @@ public class MarketListingsSearcherService implements FileOperations, JSONValida
 					}
 				}
 				
-				System.out.println("Thread[" + threadNumber + "] operations ended for file: " + splittedPath[splittedPath.length - 1]);
+				LogFlow.LOG.addTextToTextFlow("Thread[" + threadNumber + "] operations ended for file: " + splittedPath[splittedPath.length - 1] + "\n", 1, logTextFlow);
 			});
 		}
 		
 		stopSearchListings();
-		System.out.println(lineSeparator);
+		LogFlow.LOG.addTextToTextFlow(lineSeparator, 1, logTextFlow);
 		
 		if(!resultsList.isEmpty()) {
 			String filePath = SEARCH_RESULT_FILE_PATH + dateFormat.format(Calendar.getInstance().getTime()) + "_" + Arrays.stream(splittedWordsToSearch).collect(Collectors.joining("_", "[", "]")) + ".json";
 			writeFile(filePath, new Gson().toJson(resultsList));
 			String[] splittedFilePath = filePath.split("/");
-			System.out.println("Matched history transactions was saved successfully to file: " + splittedFilePath[splittedFilePath.length - 1]);
+			LogFlow.LOG.addTextToTextFlow("Matched history transactions was saved successfully to file: " + splittedFilePath[splittedFilePath.length - 1] + "\n", 2, logTextFlow);
 		} else {
-			System.out.println("There were no matches corresponding to your search criteria.");
+			LogFlow.LOG.addTextToTextFlow("There were no matches corresponding to your search criteria.\n", 2, logTextFlow);
 		}
 		
 		Platform.runLater(() -> {
