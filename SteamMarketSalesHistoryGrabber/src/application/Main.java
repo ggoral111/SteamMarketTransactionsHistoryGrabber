@@ -18,7 +18,7 @@ public class Main extends Application {
 		try {
 			FXMLLoader loader = new FXMLLoader(getClass().getResource("MainWindow.fxml"));
 			VBox root = (VBox) loader.load();
-			Scene scene = new Scene(root,1270,990);
+			Scene scene = new Scene(root,1270,790);
 			scene.getStylesheets().add(getClass().getResource("application.css").toExternalForm());	
 			
 			// Load controller

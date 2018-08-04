@@ -89,7 +89,7 @@ public class MainController {
 		CookieHandler.setDefault(signInThroughSteamCookieManager);	
 		signInThroughSteamWebView = new WebView();
 		signInThroughSteamWebView.setPrefWidth(1280);
-		signInThroughSteamWebView.setPrefHeight(720);
+		signInThroughSteamWebView.setPrefHeight(520);
 		signInThroughSteamWebView.setContextMenuEnabled(false);
 		signInThroughSteamWebView.setZoom(1);		
 		signInThroughSteamWebEngine = signInThroughSteamWebView.getEngine();
