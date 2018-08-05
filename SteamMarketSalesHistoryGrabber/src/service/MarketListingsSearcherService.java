@@ -50,7 +50,7 @@ public class MarketListingsSearcherService implements FileOperations, JSONValida
 		dateFormat = new SimpleDateFormat("MM-dd-YYYY_HH-mm-ss");
 	}
 	
-	public void searchListings(String wordsToSearch, Button stopSearchListingsButton, TextFlow logTextFlow) {
+	public void searchListings(String wordsToSearch, Button stopSearchListingsButton, TextFlow logTextFlow, boolean sortResults) {
 		List<String> filesPathsList = getFilePaths();
 		String[] splittedWordsToSearch = splitSearchWords(wordsToSearch);
 		List<MarketListing> resultsList = Collections.synchronizedList(new ArrayList<>());
@@ -100,6 +100,11 @@ public class MarketListingsSearcherService implements FileOperations, JSONValida
 		
 		if(!resultsList.isEmpty()) {
 			String filePath = SEARCH_RESULT_FILE_PATH + dateFormat.format(Calendar.getInstance().getTime()) + "_" + Arrays.stream(splittedWordsToSearch).collect(Collectors.joining("_", "[", "]")) + ".json";
+			
+			if(sortResults) {
+				Collections.sort(resultsList);
+			}
+			
 			writeFile(filePath, new Gson().toJson(resultsList));
 			String[] splittedFilePath = filePath.split("/");
 			LogFlow.LOG.addTextToTextFlow("Matched history transactions was saved successfully to file: " + splittedFilePath[splittedFilePath.length - 1] + "\n", 2, logTextFlow);

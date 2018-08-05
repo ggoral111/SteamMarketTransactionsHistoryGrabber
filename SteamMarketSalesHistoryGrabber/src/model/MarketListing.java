@@ -1,6 +1,6 @@
 package model;
 
-public class MarketListing {
+public class MarketListing implements Comparable<MarketListing> {
 
 	private String history_row_id, item_name, item_game_listing_name, item_price, item_action_type, item_whoactedwith_profile_name, item_whoactedwith_profile_url, item_date, asset_id, inspect_ingame;
 	
@@ -112,6 +112,11 @@ public class MarketListing {
 	@Override
 	public String toString() {
 		return this.item_name + " | " + this.item_game_listing_name + " | " + this.item_price + " | " + this.item_action_type + " | " + this.item_whoactedwith_profile_name + " | " + this.item_whoactedwith_profile_url + " | " + this.item_date;	
+	}
+
+	@Override
+	public int compareTo(MarketListing o) {
+		return this.getItem_name().compareTo(o.getItem_name());
 	}
 	
 }

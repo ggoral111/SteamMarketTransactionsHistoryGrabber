@@ -8,6 +8,7 @@ import javafx.beans.value.ObservableValue;
 import javafx.concurrent.Worker;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.AnchorPane;
@@ -52,6 +53,9 @@ public class MainController {
 	
 	@FXML
 	private TextFlow logTextFlow;
+	
+	@FXML
+	private CheckBox sortCheckBox;
 
 	private final static HistoryManagementService HISTORY_MANAGEMENT_SERVICE;
 	private final static MarketListingsSearcherService MARKET_LISTINGS_SEARCHER_SERVICE;
@@ -177,7 +181,7 @@ public class MainController {
 			disableTextFieldsAndButtons();
 			disableSearchTextFieldAndButtons();
 			logTextFlow.getChildren().clear();
-			MARKET_LISTINGS_SEARCHER_SERVICE.searchListings(searchListingsWordsTextFieldValue, stopSearchListingsButton, logTextFlow);
+			MARKET_LISTINGS_SEARCHER_SERVICE.searchListings(searchListingsWordsTextFieldValue, stopSearchListingsButton, logTextFlow, sortCheckBox.isSelected());
 		}
 	}
 	
@@ -194,6 +198,7 @@ public class MainController {
 	private void disableSearchTextFieldAndButtons() {
 		searchListingsWordsTextField.setDisable(true);
 		startSearchListingsButton.setDisable(true);
+		sortCheckBox.setDisable(true);
 		
 		if(isSignedIntoSteam && isReadyToGrabData) {
 			stopSearchListingsButton.setDisable(true);
@@ -205,6 +210,7 @@ public class MainController {
 	private void enableSearchTextFieldAndButtons() {
 		searchListingsWordsTextField.setDisable(false);
 		startSearchListingsButton.setDisable(false);
+		sortCheckBox.setDisable(false);
 		stopSearchListingsButton.setDisable(true);
 	}
 	
@@ -223,10 +229,12 @@ public class MainController {
 	}
 	
 	private void enableTextFieldsAndButtons() {
-		marketTransactionsNumberTextField.setDisable(false);
-		marketTransactionsOffsetTextField.setDisable(false);
-		startMarketHistoryParserButton.setDisable(false);
-		stopMarketHistoryParserButton.setDisable(true);
+		if(isSignedIntoSteam) {
+			marketTransactionsNumberTextField.setDisable(false);
+			marketTransactionsOffsetTextField.setDisable(false);
+			startMarketHistoryParserButton.setDisable(false);
+			stopMarketHistoryParserButton.setDisable(true);
+		}
 	}
 	
 	public void stopParserOnWindowClose() {
